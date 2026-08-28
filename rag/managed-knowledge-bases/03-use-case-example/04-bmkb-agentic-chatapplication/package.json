@@ -17,9 +17,9 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc -b --verbose",
     "lint": "npm run lint --workspaces --if-present",
-    "synth": "npm run synth --workspace infra",
-    "deploy": "npm run deploy --workspace infra",
-    "destroy": "npm run destroy --workspace infra"
+    "synth": "npm run synth --workspace deploy",
+    "deploy": "npm run deploy --workspace deploy",
+    "destroy": "npm run destroy --workspace deploy"
   },
   "devDependencies": {
     "typescript": "5.9.3"
