@@ -1,6 +1,6 @@
 # Multi-Tenant Agentic Document Chat with Amazon Bedrock Managed Knowledge Base
 
-This repository is the companion sample for the AWS blog post [Build multi-tenant agentic chat applications on enterprise data with Amazon Bedrock Managed Knowledge Base](https://aws.amazon.com/blogs/machine-learning/TODO-REPLACE-WITH-FINAL-URL).
+This sample is the companion code for the AWS blog post [Build multi-tenant agentic chat applications on enterprise data with Amazon Bedrock Managed Knowledge Base](https://aws.amazon.com/blogs/machine-learning/TODO-REPLACE-WITH-FINAL-URL).
 
 Upload a document, then ask questions about it. The application uses **Amazon Bedrock Managed Knowledge Base** for ingestion, storage, and agentic retrieval — no vector store to provision or manage. Each user's documents are isolated through metadata filtering on the authenticated identity.
 
@@ -35,17 +35,16 @@ Every document is tagged with the caller's Cognito `sub` at ingest time. Every r
 ## Project structure
 
 ```
-bmkb-doc-chat/
+04-bmkb-agentic-chatapplication/
 ├── deploy/                 # CDK v2 stack (Managed KB, API GW, Lambdas, SQS, DynamoDB, S3, CloudFront, Cognito)
 ├── docs/                   # Detailed technical documentation (architecture, API, security)
 ├── frontend/               # React + Vite + Tailwind
-├── lambda/
-│   ├── common/             # @bmkb/common — shared contracts + helpers
-│   ├── upload/             # POST /upload
-│   ├── ingest-worker/      # SQS → IngestKnowledgeBaseDocuments
-│   ├── chat/               # POST /chat (AgenticRetrieveStream)
-│   └── status/             # GET /status
-└── samples/                # Example documents + test queries
+└── lambda/
+    ├── common/             # @bmkb/common — shared contracts + helpers
+    ├── upload/             # POST /upload
+    ├── ingest-worker/      # SQS → IngestKnowledgeBaseDocuments
+    ├── chat/               # POST /chat (AgenticRetrieveStream)
+    └── status/             # GET /status
 ```
 
 ## Prerequisites
@@ -58,7 +57,12 @@ bmkb-doc-chat/
 
 ### 1. Build locally
 
+All commands below run from this directory, so change into it first:
+
 ```bash
+git clone https://github.com/aws-samples/amazon-bedrock-samples.git
+cd amazon-bedrock-samples/rag/managed-knowledge-bases/03-use-case-example/04-bmkb-agentic-chatapplication
+
 nvm use
 npm ci
 npm run build
