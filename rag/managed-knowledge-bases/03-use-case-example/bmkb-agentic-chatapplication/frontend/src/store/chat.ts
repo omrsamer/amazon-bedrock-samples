@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { AUTO_MODEL_ID, type ChatCitation, type ChatTurn } from '@bmkb/common';
-import { chatStream, FmkbApiError } from '../lib/api.js';
+import { chatStream, BmkbApiError } from '../lib/api.js';
 
 /**
  * Max prior turns the client replays for multi-turn context. Kept at (or below)
@@ -151,7 +151,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
       } else {
         const messageText =
-          err instanceof FmkbApiError
+          err instanceof BmkbApiError
             ? `${err.apiError?.code ?? err.status}: ${err.message}`
             : err instanceof Error
               ? err.message

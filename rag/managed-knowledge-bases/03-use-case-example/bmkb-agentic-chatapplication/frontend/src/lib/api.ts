@@ -53,14 +53,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
 }
 
 /** Error thrown by the client; carries the structured `ApiError` when present. */
-export class FmkbApiError extends Error {
+export class BmkbApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly apiError?: ApiError,
   ) {
     super(message);
-    this.name = 'FmkbApiError';
+    this.name = 'BmkbApiError';
   }
 
   get retryable(): boolean {
@@ -70,7 +70,7 @@ export class FmkbApiError extends Error {
 
 function assertConfigured(): void {
   if (!IS_API_CONFIGURED) {
-    throw new FmkbApiError(
+    throw new BmkbApiError(
       'API base URL is not configured (config.json missing apiBase). Redeploy to regenerate it.',
       0,
     );
@@ -83,7 +83,7 @@ function authHeaders(): Record<string, string> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
-async function parseError(res: Response): Promise<FmkbApiError> {
+async function parseError(res: Response): Promise<BmkbApiError> {
   let apiError: ApiError | undefined;
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -95,7 +95,7 @@ async function parseError(res: Response): Promise<FmkbApiError> {
   } catch {
     /* non-JSON error body; keep the status line */
   }
-  return new FmkbApiError(message, res.status, apiError);
+  return new BmkbApiError(message, res.status, apiError);
 }
 
 async function jsonRequest<TResponse>(
@@ -143,7 +143,7 @@ export async function putToPresignedUrl(uploadUrl: string, file: File): Promise<
     body: file,
   });
   if (!res.ok) {
-    throw new FmkbApiError(`presigned upload failed (${res.status})`, res.status);
+    throw new BmkbApiError(`presigned upload failed (${res.status})`, res.status);
   }
 }
 

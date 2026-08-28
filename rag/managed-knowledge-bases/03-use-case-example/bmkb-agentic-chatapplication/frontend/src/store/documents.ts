@@ -6,7 +6,7 @@ import {
   type UploadRequest,
 } from '@bmkb/common';
 import {
-  FmkbApiError,
+  BmkbApiError,
   deleteDocumentApi,
   getBatchStatus,
   listDocuments,
@@ -185,7 +185,7 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
         });
       } catch (err) {
         const message =
-          err instanceof FmkbApiError
+          err instanceof BmkbApiError
             ? `${err.apiError?.code ?? err.status}: ${err.message}`
             : err instanceof Error
               ? err.message
