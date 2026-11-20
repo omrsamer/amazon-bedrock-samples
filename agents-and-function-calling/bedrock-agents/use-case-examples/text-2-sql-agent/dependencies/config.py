@@ -18,7 +18,10 @@ logging.basicConfig(format='[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d}
 logger = logging.getLogger(__name__)
 
 # Resolve the Region before constructing clients, ARNs, or resource names.
-from security_config import require_aws_region
+if __package__:  # Imported by the notebook as dependencies.config.
+    from .security_config import require_aws_region
+else:  # Imported as config by the build and cleanup scripts.
+    from security_config import require_aws_region
 
 session = boto3.session.Session()
 region = require_aws_region(session.region_name)
@@ -45,6 +48,7 @@ account_id = sts_client.get_caller_identity()["Account"]
 # assign variables
 suffix = f"{region}-{account_id}"
 agent_name = "text-2-sql-agent"
+deployment_id = f"{agent_name}-{suffix}"
 agent_alias_name = "workshop-alias"
 bucket_name = f'{agent_name}-{suffix}'
 bucket_key = f'{agent_name}-schema.json'
@@ -53,7 +57,7 @@ schema_arn = f'arn:aws:s3:::{bucket_name}/{bucket_key}'
 bedrock_agent_bedrock_allow_policy_name = f"{agent_name}-allow-{suffix}"
 bedrock_agent_s3_allow_policy_name = f"{agent_name}-s3-allow-{suffix}"
 lambda_role_name = f'{agent_name}-lambda-role-{suffix}'
-agent_role_name = f'AmazonBedrockExecutionRoleForAgents_{suffix}'
+agent_role_name = f'AmazonBedrockExecutionRoleForAgents_text2sql_{region}'
 lambda_query_policy_name = f'{agent_name}-lambda-query-{suffix}'
 glue_data_policy_name = f'{agent_name}-glue-data-{suffix}'
 lambda_code_path = "lambda_function.py"
@@ -71,8 +75,7 @@ s3_loc = "s3://" + bucket_name + "/" + bucket_key
 s3_bucket=bucket_name
 db_loc = "s3://" + s3_bucket + "/db/"
 athena_result_loc = "s3://" + s3_bucket + "/athena_result/" 
-#foundation_Model='anthropic.claude-v2:1'
-foundation_Model='anthropic.claude-3-sonnet-20240229-v1:0'
+foundation_model_id = 'amazon.nova-lite-v1:0'
 idleSessionTTLInSeconds=3600
 #print(db_loc)
 #glue_crawler_name='TheHistoryOfBaseball'

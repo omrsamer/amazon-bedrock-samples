@@ -1,5 +1,7 @@
 import importlib.util
 import pathlib
+import runpy
+import subprocess
 import sys
 import types
 import unittest
@@ -12,8 +14,43 @@ from security_config import require_aws_region
 
 
 class RegionConfigurationTests(unittest.TestCase):
+    def test_notebook_and_script_imports_from_clean_interpreters(self):
+        # Do not inherit the test runner's sys.path: the notebook only adds the
+        # sample root, whereas running dependencies/*.py adds that directory.
+        program = """
+import importlib, pathlib, sys, types
+from unittest.mock import Mock
+session = Mock(region_name='us-east-1')
+session.client.return_value.get_caller_identity.return_value = {'Account': '123456789012'}
+sys.modules['boto3'] = types.SimpleNamespace(session=types.SimpleNamespace(Session=lambda: session))
+sys.path.insert(0, str(pathlib.Path.cwd()))
+config = importlib.import_module(sys.argv[1])
+assert config.region == 'us-east-1'
+assert config.account_id == '123456789012'
+"""
+        for module, cwd in (("dependencies.config", DEPENDENCIES_ROOT.parent), ("config", DEPENDENCIES_ROOT)):
+            with self.subTest(module=module):
+                run = subprocess.run([sys.executable, "-I", "-B", "-c", program, module],
+                                     cwd=cwd, capture_output=True, text=True)
+                self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_normalizes_configured_region(self):
         self.assertEqual(require_aws_region(" eu-west-1 "), "eu-west-1")
+
+    def test_unavailable_model_stops_build_before_bucket_creation(self):
+        for status, inference_types in (("LEGACY", ["ON_DEMAND"]), ("ACTIVE", ["INFERENCE_PROFILE"])):
+            with self.subTest(status=status, inference_types=inference_types):
+                config = types.ModuleType("config")
+                config.region = "us-east-1"
+                config.foundation_model_id = "sample.model-v1:0"
+                config.s3_client = mock.Mock()
+                config.aws_client = mock.Mock()
+                config.aws_client.return_value.get_foundation_model.return_value = {
+                    "modelDetails": {"modelLifecycle": {"status": status}, "inferenceTypesSupported": inference_types}
+                }
+                with mock.patch.dict(sys.modules, {"config": config}), self.assertRaisesRegex(RuntimeError, "on-demand"):
+                    runpy.run_path(str(DEPENDENCIES_ROOT / "build_infrastructure.py"))
+                config.s3_client.create_bucket.assert_not_called()
 
     def test_rejects_missing_region_before_resource_construction(self):
         for region in (None, "", "   "):

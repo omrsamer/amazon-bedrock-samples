@@ -1,9 +1,23 @@
 from config import *
 from security_config import (
+    GLUE_SERVICE_POLICY_ARN,
+    LAMBDA_LOGGING_POLICY_ARN,
     build_athena_workgroup_configuration,
     build_glue_data_policy,
     build_lambda_query_policy,
+    deployment_tag,
 )
+
+
+# Fail before provisioning if the model is unavailable for regional, on-demand use.
+model = aws_client("bedrock").get_foundation_model(
+    modelIdentifier=foundation_model_id
+)["modelDetails"]
+if (
+    model["modelLifecycle"]["status"] != "ACTIVE"
+    or "ON_DEMAND" not in model["inferenceTypesSupported"]
+):
+    raise RuntimeError(f"Choose an active regional on-demand foundation model in {region}.")
 
 
 # ### Create S3 bucket and upload API Schema
@@ -90,38 +104,16 @@ glue_assume_role_policy = {
     ],
 }
 
-try:
-    glue_iam_role = iam_client.create_role(
-        RoleName=glue_role_name,
-        AssumeRolePolicyDocument=json.dumps(glue_assume_role_policy),
-    )
-    time.sleep(10)
-except iam_client.exceptions.EntityAlreadyExistsException:
-    glue_iam_role = iam_client.get_role(RoleName=glue_role_name)
-
-glue_service_policy_arn = (
-    "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+iam_client.create_role(
+    RoleName=glue_role_name,
+    AssumeRolePolicyDocument=json.dumps(glue_assume_role_policy),
+    Tags=[deployment_tag(deployment_id)],
 )
-for attached_policy in iam_client.list_attached_role_policies(
-    RoleName=glue_role_name
-)["AttachedPolicies"]:
-    if attached_policy["PolicyArn"] != glue_service_policy_arn:
-        iam_client.detach_role_policy(
-            RoleName=glue_role_name,
-            PolicyArn=attached_policy["PolicyArn"],
-        )
-for inline_policy_name in iam_client.list_role_policies(
-    RoleName=glue_role_name
-)["PolicyNames"]:
-    if inline_policy_name != glue_data_policy_name:
-        iam_client.delete_role_policy(
-            RoleName=glue_role_name,
-            PolicyName=inline_policy_name,
-        )
+time.sleep(10)
 
 iam_client.attach_role_policy(
     RoleName=glue_role_name,
-    PolicyArn=glue_service_policy_arn,
+    PolicyArn=GLUE_SERVICE_POLICY_ARN,
 )
 iam_client.put_role_policy(
     RoleName=glue_role_name,
@@ -224,40 +216,16 @@ lambda_assume_role_policy = {
     ],
 }
 
-try:
-    lambda_iam_role = iam_client.create_role(
-        RoleName=lambda_role_name,
-        AssumeRolePolicyDocument=json.dumps(lambda_assume_role_policy),
-    )
-    time.sleep(10)
-except iam_client.exceptions.EntityAlreadyExistsException:
-    lambda_iam_role = iam_client.get_role(RoleName=lambda_role_name)
-
-    
-lambda_logging_policy_arn = (
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+lambda_iam_role = iam_client.create_role(
+    RoleName=lambda_role_name,
+    AssumeRolePolicyDocument=json.dumps(lambda_assume_role_policy),
+    Tags=[deployment_tag(deployment_id)],
 )
-attached_lambda_policies = iam_client.list_attached_role_policies(
-    RoleName=lambda_role_name
-)["AttachedPolicies"]
-for attached_policy in attached_lambda_policies:
-    if attached_policy["PolicyArn"] != lambda_logging_policy_arn:
-        iam_client.detach_role_policy(
-            RoleName=lambda_role_name,
-            PolicyArn=attached_policy["PolicyArn"],
-        )
-for inline_policy_name in iam_client.list_role_policies(
-    RoleName=lambda_role_name
-)["PolicyNames"]:
-    if inline_policy_name != lambda_query_policy_name:
-        iam_client.delete_role_policy(
-            RoleName=lambda_role_name,
-            PolicyName=inline_policy_name,
-        )
+time.sleep(10)
 
 iam_client.attach_role_policy(
     RoleName=lambda_role_name,
-    PolicyArn=lambda_logging_policy_arn,
+    PolicyArn=LAMBDA_LOGGING_POLICY_ARN,
 )
 iam_client.put_role_policy(
     RoleName=lambda_role_name,
@@ -322,7 +290,7 @@ bedrock_agent_bedrock_allow_policy_statement = {
             "Effect": "Allow",
             "Action": "bedrock:InvokeModel",
             "Resource": [
-                f"arn:aws:bedrock:{region}::foundation-model/{foundation_Model}"
+                f"arn:aws:bedrock:{region}::foundation-model/{foundation_model_id}"
             ]
         }
     ]
@@ -332,7 +300,8 @@ bedrock_policy_json = json.dumps(bedrock_agent_bedrock_allow_policy_statement)
 bedrock_agent_bedrock_allow_policy_name
 agent_bedrock_policy = iam_client.create_policy(
     PolicyName=bedrock_agent_bedrock_allow_policy_name,
-    PolicyDocument=bedrock_policy_json
+    PolicyDocument=bedrock_policy_json,
+    Tags=[deployment_tag(deployment_id)],
 )
 
 
@@ -359,7 +328,8 @@ bedrock_agent_s3_json = json.dumps(bedrock_agent_s3_allow_policy_statement)
 agent_s3_schema_policy = iam_client.create_policy(
     PolicyName=bedrock_agent_s3_allow_policy_name,
     Description=f"Policy to allow invoke Lambda that was provisioned for it.",
-    PolicyDocument=bedrock_agent_s3_json
+    PolicyDocument=bedrock_agent_s3_json,
+    Tags=[deployment_tag(deployment_id)],
 )
 
 
@@ -389,7 +359,8 @@ assume_role_policy_document = {
 assume_role_policy_document_json = json.dumps(assume_role_policy_document)
 agent_role = iam_client.create_role(
     RoleName=agent_role_name,
-    AssumeRolePolicyDocument=assume_role_policy_document_json
+    AssumeRolePolicyDocument=assume_role_policy_document_json,
+    Tags=[deployment_tag(deployment_id)],
 )
 
 # Pause to make sure role is created
@@ -413,11 +384,20 @@ iam_client.attach_role_policy(
 
 
 # Create Agent
-agent_instruction = """You are an expert database querying assistant that answers questions about baseball players. First use the getschema tool to understand the available tables and columns. Then call querydatabase with exactly one read-only SELECT statement against those tables. Do not generate DDL, DML mutations, UNLOAD, comments, common table expressions, quoted identifiers, or multiple statements. Always include a reasonable LIMIT for row-returning queries. Here is an example: <example>SELECT * FROM thehistoryofbaseball.players LIMIT 10</example>. Return the answer and the SELECT statement in plain English."""
-
-
-##PLEASE Note
-###Disabling pre-processing can enhance the agent's response time, however, it may increase the risk of inaccuracies in SQL query generation or some sql ingestion. Careful consideration is advised when toggling this feature based on your use case requirements.
+agent_instruction = """Answer baseball questions using the sample database.
+1. Call getschema once to learn the table and column names. The schema contains no
+   player names, salaries, or other row values; do not look for answers in it.
+2. Call querydatabase with one read-only SELECT to look up the actual data. When a
+   question gives a player's name but another table uses player_id, join player to that
+   table on player_id and filter by name_first and name_last in the same SELECT.
+   For example, for a named player's salary in a given year, use this pattern, replacing
+   the illustrative name and year with those in the question:
+   <example>SELECT p.name_first, p.name_last, s.salary FROM player AS p
+   JOIN salary AS s ON p.player_id = s.player_id
+   WHERE p.name_first = 'Example' AND p.name_last = 'Player' AND s.year = 2000 LIMIT 10</example>
+3. Answer from the returned rows and include the SQL you used. If no rows match, say so.
+Use only the tables returned by getschema, unquoted identifiers, and a reasonable LIMIT.
+Do not use comments, common table expressions, multiple statements or operations that change data."""
 
 
 response = bedrock_agent_client.create_agent(
@@ -425,29 +405,8 @@ response = bedrock_agent_client.create_agent(
     agentResourceRoleArn=agent_role['Role']['Arn'],
     description="Agent for performing sql queries.",
     idleSessionTTLInSeconds=idleSessionTTLInSeconds,
-    foundationModel=foundation_Model,
+    foundationModel=foundation_model_id,
     instruction=agent_instruction,
-    promptOverrideConfiguration={
-    #Disable preprocessing prompt
-        'promptConfigurations': [
-            {
-                'promptType': 'PRE_PROCESSING',
-                'promptCreationMode': 'OVERRIDDEN',
-                'promptState': 'DISABLED',
-                'basePromptTemplate':' ',
-                 'inferenceConfiguration': {
-                    'temperature': 0,
-                    'topP': 1,
-                    'topK': 123,
-                    'maximumLength': 2048,
-                    'stopSequences': [
-                        'Human',
-                    ]
-                },
-                
-            }
-        ]
-    }
 )
     
 
